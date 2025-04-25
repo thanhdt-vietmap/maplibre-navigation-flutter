@@ -36,6 +36,7 @@ dependencies:
   flutter_easyloading: ^3.0.5
   flutter_typeahead: ^5.2.0
   intl: ^0.18.1
+  flutter_dotenv: ^5.2.1
 
 dev_dependencies:
   integration_test:
@@ -73,6 +74,7 @@ flutter:
     - assets/tocdo.png
     - assets/50.png
     - assets/40.png
+    - .env
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

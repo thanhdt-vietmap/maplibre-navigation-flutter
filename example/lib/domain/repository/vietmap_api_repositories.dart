@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:maplibre_navigation_flutter_example/data/models/vietmap_place_model.dart';
 
 import '/core/failures/failure.dart';
@@ -18,7 +19,7 @@ import '../../core/failures/exception_failure.dart';
 class VietmapApiRepositories implements VietmapApiRepository {
   late Dio _dio;
   String baseUrl = 'https://maps.vietmap.vn/api/';
-  String apiKey = 'VIETMAP_API_KEY';
+  String apiKey = dotenv.env['VIETMAP_API_KEY'] ?? "";
   VietmapApiRepositories() {
     _dio = Dio(BaseOptions(baseUrl: baseUrl));
 

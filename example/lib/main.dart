@@ -24,8 +24,11 @@ import 'data/models/vietmap_reverse_model.dart';
 import 'domain/repository/vietmap_api_repositories.dart';
 import 'domain/usecase/get_location_from_latlng_usecase.dart';
 import 'domain/usecase/get_place_detail_usecase.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() {
+Future<void> main() async {
+  await dotenv.load(fileName: ".env");
+
   runApp(
     MaterialApp(
       builder: EasyLoading.init(),
@@ -46,7 +49,7 @@ class VietMapNavigationScreen extends StatefulWidget {
 
 class _VietMapNavigationScreenState extends State<VietMapNavigationScreen> {
   MapNavigationViewController? _controller;
-  late MapOptions _navigationOption;
+  MapOptions? _navigationOption;
   final _vietmapNavigationPlugin = MaplibreNavigationFlutter();
 
   List<LatLng> waypoints = [
@@ -64,8 +67,8 @@ class _VietMapNavigationScreenState extends State<VietMapNavigationScreen> {
   void initState() {
     super.initState();
 
-    initialize();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
+      initialize();
       Geolocator.requestPermission();
     });
   }
@@ -74,13 +77,12 @@ class _VietMapNavigationScreenState extends State<VietMapNavigationScreen> {
     if (!mounted) return;
 
     _navigationOption = _vietmapNavigationPlugin.getDefaultOptions();
-    _navigationOption.simulateRoute = false;
+    _navigationOption?.simulateRoute = false;
 
-    _navigationOption.apiKey = 'MAPBOX_ACCESS_TOKEN';
-    _navigationOption.mapStyle =
-        "https://api.maptiler.com/maps/basic-v2/style.json?key=MAPTILER_APIKEY";
+    _navigationOption?.apiKey = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? "";
+    _navigationOption?.mapStyle = dotenv.env['MAPLIBRE_TILE'] ?? "";
 
-    _vietmapNavigationPlugin.setDefaultOptions(_navigationOption);
+    _vietmapNavigationPlugin.setDefaultOptions(_navigationOption!);
   }
 
   MapOptions? options;
@@ -128,117 +130,118 @@ class _VietMapNavigationScreenState extends State<VietMapNavigationScreen> {
         top: false,
         child: Stack(
           children: [
-            NavigationView(
-              onRouteBuildFailed: (p0) {
-                EasyLoading.dismiss();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Không thể tìm tuyến đường')),
-                );
-              },
-              onMarkerClicked: (p0) {
-                debugPrint(p0.toString());
-                log("marker clicked");
-                _controller?.removeMarkers([p0 ?? 0]);
-              },
-              mapOptions: _navigationOption,
-              onNewRouteSelected: (p0) {
-                log(p0.toString());
-              },
-              onMapCreated: (p0) {
-                _controller = p0;
-              },
-              onMapMove: () => _showRecenterButton(),
-              onRouteBuilt: (p0) {
-                setState(() {
+            if (_navigationOption != null)
+              NavigationView(
+                onRouteBuildFailed: (p0) {
                   EasyLoading.dismiss();
-                  _isRouteBuilt = true;
-                });
-                debugPrint(p0.geometry);
-              },
-              onMapRendered: () async {},
-              onMapLongClick: (LatLng? latLng, Point? point) async {
-                if (_isRunning) return;
-                EasyLoading.show();
-                var data = await GetLocationFromLatLngUseCase(
-                  VietmapApiRepositories(),
-                ).call(
-                  LocationPoint(
-                    lat: latLng?.latitude ?? 0,
-                    long: latLng?.longitude ?? 0,
-                  ),
-                );
-                EasyLoading.dismiss();
-                data.fold((l) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Có lỗi xảy ra')),
+                    const SnackBar(content: Text('Không thể tìm tuyến đường')),
                   );
-                }, (r) => _showBottomSheetInfo(r));
-              },
-              onMapClick: (LatLng? latLng, Point? point) async {
-                if (_isRunning) return;
-                if (focusNode.hasFocus) {
-                  FocusScope.of(context).requestFocus(FocusNode());
-                  return;
-                }
+                },
+                onMarkerClicked: (p0) {
+                  debugPrint(p0.toString());
+                  log("marker clicked");
+                  _controller?.removeMarkers([p0 ?? 0]);
+                },
+                mapOptions: _navigationOption!,
+                onNewRouteSelected: (p0) {
+                  log(p0.toString());
+                },
+                onMapCreated: (p0) {
+                  _controller = p0;
+                },
+                onMapMove: () => _showRecenterButton(),
+                onRouteBuilt: (p0) {
+                  setState(() {
+                    EasyLoading.dismiss();
+                    _isRouteBuilt = true;
+                  });
+                  debugPrint(p0.geometry);
+                },
+                onMapRendered: () async {},
+                onMapLongClick: (LatLng? latLng, Point? point) async {
+                  if (_isRunning) return;
+                  EasyLoading.show();
+                  var data = await GetLocationFromLatLngUseCase(
+                    VietmapApiRepositories(),
+                  ).call(
+                    LocationPoint(
+                      lat: latLng?.latitude ?? 0,
+                      long: latLng?.longitude ?? 0,
+                    ),
+                  );
+                  EasyLoading.dismiss();
+                  data.fold((l) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Có lỗi xảy ra')),
+                    );
+                  }, (r) => _showBottomSheetInfo(r));
+                },
+                onMapClick: (LatLng? latLng, Point? point) async {
+                  if (_isRunning) return;
+                  if (focusNode.hasFocus) {
+                    FocusScope.of(context).requestFocus(FocusNode());
+                    return;
+                  }
 
-                var dataQuery = await _controller?.queryRenderedFeatures(
-                  point: Point(
-                    point?.x.toDouble() ?? 0,
-                    point?.y.toDouble() ?? 0,
-                  ),
-                );
-                log(dataQuery.toString());
-                if (dataQuery?.isNotEmpty == true) {}
+                  var dataQuery = await _controller?.queryRenderedFeatures(
+                    point: Point(
+                      point?.x.toDouble() ?? 0,
+                      point?.y.toDouble() ?? 0,
+                    ),
+                  );
+                  log(dataQuery.toString());
+                  if (dataQuery?.isNotEmpty == true) {}
 
-                EasyLoading.show();
-                var data = await GetLocationFromLatLngUseCase(
-                  VietmapApiRepositories(),
-                ).call(
-                  LocationPoint(
-                    lat: latLng?.latitude ?? 0,
-                    long: latLng?.longitude ?? 0,
-                  ),
-                );
-                EasyLoading.dismiss();
-                data.fold((l) {
+                  EasyLoading.show();
+                  var data = await GetLocationFromLatLngUseCase(
+                    VietmapApiRepositories(),
+                  ).call(
+                    LocationPoint(
+                      lat: latLng?.latitude ?? 0,
+                      long: latLng?.longitude ?? 0,
+                    ),
+                  );
+                  EasyLoading.dismiss();
+                  data.fold((l) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Không tìm thấy địa điểm gần vị trí bạn chọn',
+                        ),
+                      ),
+                    );
+                  }, (r) => _showBottomSheetInfo(r));
+                },
+                onRouteProgressChange: (RouteProgressEvent routeProgressEvent) {
+                  // print('-----------ProgressChange----------');
+                  // print(routeProgressEvent.currentLocation?.bearing);
+                  // print(routeProgressEvent.currentLocation?.altitude);
+                  // print(routeProgressEvent.currentLocation?.accuracy);
+                  // print(routeProgressEvent.currentLocation?.bearing);
+                  // print(routeProgressEvent.currentLocation?.latitude);
+                  // print(routeProgressEvent.currentLocation?.longitude);
+                  setState(() {
+                    this.routeProgressEvent = routeProgressEvent;
+                  });
+                  _setInstructionImage(
+                    routeProgressEvent.currentModifier,
+                    routeProgressEvent.currentModifierType,
+                  );
+                },
+                onArrival: () {
+                  _isRunning = false;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Không tìm thấy địa điểm gần vị trí bạn chọn',
+                    SnackBar(
+                      content: Container(
+                        height: 100,
+                        color: Colors.red,
+                        child: const Text('Bạn đã tới đích'),
                       ),
                     ),
                   );
-                }, (r) => _showBottomSheetInfo(r));
-              },
-              onRouteProgressChange: (RouteProgressEvent routeProgressEvent) {
-                // print('-----------ProgressChange----------');
-                // print(routeProgressEvent.currentLocation?.bearing);
-                // print(routeProgressEvent.currentLocation?.altitude);
-                // print(routeProgressEvent.currentLocation?.accuracy);
-                // print(routeProgressEvent.currentLocation?.bearing);
-                // print(routeProgressEvent.currentLocation?.latitude);
-                // print(routeProgressEvent.currentLocation?.longitude);
-                setState(() {
-                  this.routeProgressEvent = routeProgressEvent;
-                });
-                _setInstructionImage(
-                  routeProgressEvent.currentModifier,
-                  routeProgressEvent.currentModifierType,
-                );
-              },
-              onArrival: () {
-                _isRunning = false;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Container(
-                      height: 100,
-                      color: Colors.red,
-                      child: const Text('Bạn đã tới đích'),
-                    ),
-                  ),
-                );
-              },
-            ),
+                },
+              ),
             Positioned(
               top: MediaQuery.of(context).viewPadding.top,
               left: 0,

@@ -9,9 +9,8 @@ import android.graphics.Color
 import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
-import android.location.Location
+//import android.location.Location
 import android.os.Build
-import android.os.Bundle
 import androidx.lifecycle.DefaultLifecycleObserver
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
@@ -19,13 +18,14 @@ import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.platform.PlatformView
-import org.maplibre.android.BuildConfig
 
 import android.view.View
 import androidx.lifecycle.LifecycleOwner
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
+import com.mapbox.api.directions.v5.DirectionsCriteria.IMPERIAL
+import com.mapbox.api.directions.v5.DirectionsCriteria.METRIC
 import io.flutter.plugin.common.MethodCall
 import org.maplibre.android.annotations.IconFactory
 import org.maplibre.android.annotations.Marker
@@ -37,10 +37,9 @@ import org.maplibre.android.camera.CameraUpdateFactory.newLatLngBounds
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.gestures.MoveGestureDetector
-import org.maplibre.android.location.LocationComponent
 import org.maplibre.android.location.LocationComponentActivationOptions
 import org.maplibre.android.location.LocationComponentOptions
-import org.maplibre.android.location.engine.LocationEngine
+import org.maplibre.android.location.engine.LocationEngineDefault
 import org.maplibre.android.location.modes.CameraMode
 import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
@@ -68,31 +67,37 @@ import org.maplibre.models.VietMapEvents
 import org.maplibre.models.VietMapLocation
 import org.maplibre.models.VietMapRouteProgressEvent
 import org.maplibre.navigation.android.navigation.ui.v5.ThemeSwitcher
+import org.maplibre.navigation.android.navigation.ui.v5.camera.NavigationCamera
+import org.maplibre.navigation.android.navigation.ui.v5.route.NavigationMapRoute
 import org.maplibre.navigation.android.navigation.ui.v5.route.NavigationRoute
+import org.maplibre.navigation.android.navigation.ui.v5.toJvmPoints
+import org.maplibre.navigation.android.navigation.ui.v5.voice.NavigationSpeechPlayer
 import org.maplibre.navigation.android.navigation.ui.v5.voice.SpeechAnnouncement
-import org.maplibre.navigation.android.navigation.v5.location.engine.LocationEngineProvider
-import org.maplibre.navigation.android.navigation.v5.location.replay.ReplayRouteLocationEngine
-import org.maplibre.navigation.android.navigation.v5.milestone.Milestone
-import org.maplibre.navigation.android.navigation.v5.milestone.MilestoneEventListener
-import org.maplibre.navigation.android.navigation.v5.milestone.VoiceInstructionMilestone
-import org.maplibre.navigation.android.navigation.v5.models.BannerInstructions
-import org.maplibre.navigation.android.navigation.v5.models.DirectionsCriteria
-import org.maplibre.navigation.android.navigation.v5.models.DirectionsCriteria.IMPERIAL
-import org.maplibre.navigation.android.navigation.v5.models.DirectionsCriteria.METRIC
-import org.maplibre.navigation.android.navigation.v5.models.DirectionsResponse
-import org.maplibre.navigation.android.navigation.v5.models.DirectionsRoute
-import org.maplibre.navigation.android.navigation.v5.navigation.MapLibreNavigation
-import org.maplibre.navigation.android.navigation.v5.navigation.MapLibreNavigationOptions
-import org.maplibre.navigation.android.navigation.v5.navigation.NavigationEventListener
-import org.maplibre.navigation.android.navigation.v5.navigation.NavigationMapRoute
-import org.maplibre.navigation.android.navigation.v5.navigation.camera.RouteInformation
-import org.maplibre.navigation.android.navigation.v5.offroute.OffRouteListener
-import org.maplibre.navigation.android.navigation.v5.route.FasterRouteListener
-import org.maplibre.navigation.android.navigation.v5.route.RouteListener
-import org.maplibre.navigation.android.navigation.v5.routeprogress.ProgressChangeListener
-import org.maplibre.navigation.android.navigation.v5.routeprogress.RouteProgress
-import org.maplibre.navigation.android.navigation.v5.snap.SnapToRoute
-import org.maplibre.navigation.android.navigation.v5.utils.RouteUtils
+import org.maplibre.navigation.android.navigation.ui.v5.voice.SpeechPlayerProvider
+import org.maplibre.navigation.core.location.Location
+import org.maplibre.navigation.core.location.engine.LocationEngine
+import org.maplibre.navigation.core.location.engine.LocationEngineProvider
+import org.maplibre.navigation.core.location.engine.MapLibreLocationEngine
+//import org.maplibre.navigation.core.location.engine.LocationEngineProvider
+import org.maplibre.navigation.core.location.replay.ReplayRouteLocationEngine
+import org.maplibre.navigation.core.location.toAndroidLocation
+import org.maplibre.navigation.core.milestone.Milestone
+import org.maplibre.navigation.core.milestone.MilestoneEventListener
+import org.maplibre.navigation.core.milestone.VoiceInstructionMilestone
+import org.maplibre.navigation.core.models.DirectionsResponse
+import org.maplibre.navigation.core.models.DirectionsRoute
+import org.maplibre.navigation.core.navigation.MapLibreNavigation
+import org.maplibre.navigation.core.navigation.MapLibreNavigationOptions
+import org.maplibre.navigation.core.navigation.NavigationEventListener
+//import org.maplibre.navigation.core.navigation.NavigationMapRoute
+import org.maplibre.navigation.core.navigation.camera.RouteInformation
+import org.maplibre.navigation.core.offroute.OffRouteListener
+import org.maplibre.navigation.core.route.FasterRouteListener
+import org.maplibre.navigation.core.route.RouteListener
+import org.maplibre.navigation.core.routeprogress.ProgressChangeListener
+import org.maplibre.navigation.core.routeprogress.RouteProgress
+import org.maplibre.navigation.core.snap.SnapToRoute
+import org.maplibre.navigation.core.utils.RouteUtils
 import org.maplibre.turf.TurfMisc
 import org.maplibre.utilities.PluginUtilities
 import retrofit2.Call
@@ -113,16 +118,17 @@ class FlutterMapLibreNavigationView :
     FasterRouteListener, RouteListener,
     EventChannel.StreamHandler, MapLibreMap.OnMapLongClickListener,
     DefaultLifecycleObserver,
+
     MapLibreMap.OnMapClickListener {
 
-
+    private var speechPlayer: NavigationSpeechPlayer? = null
     private var activity: Activity? = null
     private val context: Context
     private val methodChannel: MethodChannel
     private val eventChannel: EventChannel
     private val options: MapLibreMapOptions
     private var mapView: MapView? = null
-    private var vietmapGL: MapLibreMap? = null
+    private var mapLibreMap: MapLibreMap? = null
     private var currentRoute: DirectionsRoute? = null
     private var routeClicked: Boolean = false
     private var locationEngine: LocationEngine? = null
@@ -130,7 +136,7 @@ class FlutterMapLibreNavigationView :
     private var directionsRoutes: List<DirectionsRoute>? = null
     private var distanceToOffRoute = 30 //distance in meter
     private val navigationOptions =
-        MapLibreNavigationOptions.builder().build()
+        MapLibreNavigationOptions.Builder().build()
     private var navigation: MapLibreNavigation? = null
     private var mapReady = false
     private var isDisposed = false
@@ -221,15 +227,16 @@ class FlutterMapLibreNavigationView :
 
     private fun playVoiceAnnouncement(milestone: Milestone?) {
         if (milestone is VoiceInstructionMilestone) {
-//            var announcement = SpeechAnnouncement.builder()
-//                .voiceInstructionMilestone(milestone as VoiceInstructionMilestone?).build()
-//            speechPlayer!!.play(announcement)
+
+            var announcement = SpeechAnnouncement.builder()
+                .voiceInstructionMilestone(milestone as VoiceInstructionMilestone?).build()
+            speechPlayer!!.play(announcement)
         }
     }
 
     private fun configSpeechPlayer() {
-//        var speechPlayerProvider = SpeechPlayerProvider(context, "vi", true)
-//        this.speechPlayer = NavigationSpeechPlayer(speechPlayerProvider)
+        var speechPlayerProvider = SpeechPlayerProvider(context, "vi", true)
+        this.speechPlayer = NavigationSpeechPlayer(speechPlayerProvider)
     }
 
     override fun getView(): View {
@@ -303,10 +310,10 @@ class FlutterMapLibreNavigationView :
             "mute" -> {
                 voiceInstructionsEnabled =
                     methodCall.argument<Boolean>("isMute") ?: !voiceInstructionsEnabled
-//                speechPlayer?.let {
-//                    speechPlayer!!.isMuted = methodCall.argument<Boolean>("isMute") ?: false
-//                    result.success(speechPlayer!!.isMuted)
-//                }
+                speechPlayer?.let {
+                    speechPlayer!!.isMuted = methodCall.argument<Boolean>("isMute") ?: false
+                    result.success(speechPlayer!!.isMuted)
+                }
             }
 
             "queryRenderedFeatures" -> {
@@ -330,7 +337,7 @@ class FlutterMapLibreNavigationView :
                     val x: Double = methodCall.argument("x")!!
                     val y: Double = methodCall.argument("y")!!
                     val pixel = PointF(x.toFloat(), y.toFloat())
-                    vietmapGL!!.queryRenderedFeatures(pixel, filterExpression, *layerIds)
+                    mapLibreMap!!.queryRenderedFeatures(pixel, filterExpression, *layerIds)
                 } else {
                     val left: Double = methodCall.argument("left")!!
                     val top: Double = methodCall.argument("top")!!
@@ -339,7 +346,7 @@ class FlutterMapLibreNavigationView :
                     val rectF = RectF(
                         left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat()
                     )
-                    vietmapGL!!.queryRenderedFeatures(rectF, filterExpression, *layerIds)
+                    mapLibreMap!!.queryRenderedFeatures(rectF, filterExpression, *layerIds)
                 }
                 val featuresJson: MutableList<String> = ArrayList()
                 for (feature in features) {
@@ -403,7 +410,7 @@ class FlutterMapLibreNavigationView :
                 var i = 0
                 while (i < param.size) {
                     val latLng: LatLng = LatLng(param!![i], param!![i + 1])
-                    val pointf = vietmapGL!!.projection.toScreenLocation(latLng)
+                    val pointf = mapLibreMap!!.projection.toScreenLocation(latLng)
                     reply[i] = pointf.x.toDouble()
                     reply[i + 1] = pointf.y.toDouble()
                     i += 2
@@ -415,7 +422,7 @@ class FlutterMapLibreNavigationView :
             "map#toScreenLocation" -> {
 
                 val reply: MutableMap<String, Any> = HashMap()
-                val pointf = vietmapGL!!.projection.toScreenLocation(
+                val pointf = mapLibreMap!!.projection.toScreenLocation(
                     LatLng(
                         methodCall.argument("latitude")!!, methodCall.argument("longitude")!!
                     )
@@ -430,7 +437,7 @@ class FlutterMapLibreNavigationView :
                 val reply: MutableMap<String, Any> = HashMap()
                 val x: Double = methodCall.argument("x")!!
                 val y: Double = methodCall.argument("y")!!
-                val latlng = vietmapGL!!.projection.fromScreenLocation(
+                val latlng = mapLibreMap!!.projection.fromScreenLocation(
                     PointF(
                         x.toFloat(), y.toFloat()
                     )
@@ -442,7 +449,7 @@ class FlutterMapLibreNavigationView :
 
             "map#waitForMap" -> {
 
-                if (vietmapGL != null) {
+                if (mapLibreMap != null) {
                     result.success(null)
                     return
                 }
@@ -562,7 +569,7 @@ class FlutterMapLibreNavigationView :
         zoom = 19.0
         isOverviewing = false
         isNavigationCanceled = false
-        vietmapGL?.locationComponent?.cameraMode = CameraMode.TRACKING_GPS_NORTH
+        mapLibreMap?.locationComponent?.cameraMode = CameraMode.TRACKING_GPS_NORTH
 
         if (currentRoute != null) {
             if (simulateRoute) {
@@ -575,7 +582,7 @@ class FlutterMapLibreNavigationView :
                 }
             }
             isRunning = true
-            vietmapGL?.locationComponent?.locationEngine = null
+            mapLibreMap?.locationComponent?.locationEngine = null
             navigation?.addNavigationEventListener(this)
             navigation?.addFasterRouteListener(this)
             navigation?.addMilestoneEventListener(this)
@@ -696,10 +703,10 @@ class FlutterMapLibreNavigationView :
         val voiceEnabled = arguments["voiceInstructionsEnabled"] as? Boolean
         if (voiceEnabled != null) {
             voiceInstructionsEnabled = voiceEnabled
-//            speechPlayer?.let {
-//
-//                speechPlayer!!.isMuted = voiceEnabled
-//            }
+            speechPlayer?.let {
+
+                speechPlayer!!.isMuted = voiceEnabled
+            }
         }
 
         val bannerEnabled = arguments["bannerInstructionsEnabled"] as? Boolean
@@ -715,12 +722,12 @@ class FlutterMapLibreNavigationView :
             mapReadyResult = null
         }
         this.mapReady = true
-        this.vietmapGL = map
+        this.mapLibreMap = map
         if (simulateRoute) {
             locationEngine = ReplayRouteLocationEngine()
         }
-        vietmapGL?.setStyle(mapStyleURL?.let { Style.Builder().fromUri(it) }) { style ->
-            vietmapGL?.addOnMoveListener(object : MapLibreMap.OnMoveListener {
+        mapLibreMap?.setStyle(mapStyleURL?.let { Style.Builder().fromUri(it) }) { style ->
+            mapLibreMap?.addOnMoveListener(object : MapLibreMap.OnMoveListener {
                 override fun onMoveBegin(moveGestureDetector: MoveGestureDetector) {
                     isOverviewing = true
                     PluginUtilities.sendEvent(VietMapEvents.ON_MAP_MOVE)
@@ -747,7 +754,7 @@ class FlutterMapLibreNavigationView :
             context.addDestinationIconSymbolLayer(style)
         }
 
-        if (longPressDestinationEnabled) vietmapGL?.addOnMapLongClickListener(this)
+        if (longPressDestinationEnabled) mapLibreMap?.addOnMapLongClickListener(this)
 
 
 
@@ -762,7 +769,7 @@ class FlutterMapLibreNavigationView :
                 ), null
             )
         }
-        vietmapGL!!.setOnMarkerClickListener { marker ->
+        mapLibreMap!!.setOnMarkerClickListener { marker ->
             PluginUtilities.sendEvent(VietMapEvents.MARKER_CLICKED, "{\'markerId\':${marker.id}}")
             return@setOnMarkerClickListener true
         }
@@ -770,31 +777,31 @@ class FlutterMapLibreNavigationView :
     }
 
     private fun initMapRoute() {
-        if (vietmapGL != null) {
-//            val routeStyleRes = ThemeSwitcher.retrieveNavigationViewStyle(
-//                mapView!!.context,
-//                R.attr.navigationViewRouteStyle
-//            )
+        if (mapLibreMap != null) {
+            val routeStyleRes = ThemeSwitcher.retrieveNavigationViewStyle(
+                mapView!!.context,
+                org.maplibre.navigation.android.navigation.ui.v5.R.attr.navigationViewRouteStyle            )
             navigationMapRoute =
                 NavigationMapRoute(
                     navigation,
                     mapView!!,
-                    vietmapGL!!,
-//                    routeStyleRes,
-                    "vmadmin_province"
+                    mapLibreMap!!,
+                    routeStyleRes,
+                    "Airport labels"
                 )
         }
 
-        navigationMapRoute?.setOnRouteSelectionChangeListener {
+        navigationMapRoute?.setOnRouteSelectionChangeListener { it: DirectionsRoute ->
             routeClicked = true
 
             currentRoute = it
 
             val routePoints: List<Point> =
-                currentRoute?.routeOptions()?.coordinates() as List<Point>
+                currentRoute?.routeOptions?.coordinates as List<Point>
             animateVietmapGLForRouteOverview(padding, routePoints)
+
             primaryRouteIndex = try {
-                it.routeIndex()?.toInt() ?: 0
+                directionsRoutes?.indexOf(it)?:0
             } catch (e: Exception) {
                 0
             }
@@ -807,11 +814,11 @@ class FlutterMapLibreNavigationView :
             )
         }
 
-        vietmapGL?.addOnMapClickListener(this)
+        mapLibreMap?.addOnMapClickListener(this)
     }
 
     override fun onMapLongClick(point: LatLng): Boolean {
-        val pointf = vietmapGL!!.projection.toScreenLocation(point)
+        val pointf = mapLibreMap!!.projection.toScreenLocation(point)
         if (wayPoints.size === 2) {
             wayPoints.clear()
         }
@@ -845,7 +852,7 @@ class FlutterMapLibreNavigationView :
 
         var duration = 1000
         if (!animateBuildRoute) duration = 1
-        vietmapGL?.animateCamera(
+        mapLibreMap?.animateCamera(
             CameraUpdateFactory.newCameraPosition(cameraPosition.build()), duration
         )
     }
@@ -869,7 +876,7 @@ class FlutterMapLibreNavigationView :
         if (bearing != null) {
             cameraPosition.bearing(bearing.toDouble())
         }
-        vietmapGL?.animateCamera(
+        mapLibreMap?.animateCamera(
             CameraUpdateFactory.newCameraPosition(cameraPosition.build()), duration
         )
     }
@@ -893,7 +900,7 @@ class FlutterMapLibreNavigationView :
             cameraPosition.bearing(bearing.toDouble())
         }
 
-        vietmapGL?.moveCamera(
+        mapLibreMap?.moveCamera(
             CameraUpdateFactory.newCameraPosition(cameraPosition.build())
         )
     }
@@ -911,8 +918,12 @@ class FlutterMapLibreNavigationView :
 
         PluginUtilities.sendEvent(VietMapEvents.ROUTE_BUILDING)
         val br = bearing ?: 0.0
-        val builder = NavigationRoute.builder(activity).accessToken(apikey ?: "")
-            .origin(originPoint!!, 60.0, br.toDouble()).destination(destinationPoint!!)
+        val builder = NavigationRoute
+
+            .builder(activity).accessToken(apikey ?: "")
+
+            .origin(originPoint!!)
+            .destination(destinationPoint!!)
             .alternatives(true)
             ///driving-traffic
             ///cycling
@@ -923,11 +934,11 @@ class FlutterMapLibreNavigationView :
             override fun onResponse(
                 call: Call<DirectionsResponse?>, response: Response<DirectionsResponse?>
             ) {
-                if (response.body() == null || response.body()!!.routes().size < 1) {
+                if (response.body() == null || response.body()!!.routes.size < 1) {
                     PluginUtilities.sendEvent(VietMapEvents.ROUTE_BUILD_FAILED, "No routes found")
                     return
                 }
-                directionsRoutes = response.body()!!.routes()
+                directionsRoutes = response.body()!!.routes
                 currentRoute = if (directionsRoutes!!.size <= primaryRouteIndex) {
                     directionsRoutes!![0]
                 } else {
@@ -940,22 +951,22 @@ class FlutterMapLibreNavigationView :
                 if (navigationMapRoute != null) {
                     navigationMapRoute?.removeRoute()
                 } else {
-//                    val routeStyleRes = ThemeSwitcher.retrieveNavigationViewStyle(
-//                        mapView!!.context,
-//                        R.attr.navigationViewRouteStyle
-//                    )
+                    val routeStyleRes = ThemeSwitcher.retrieveNavigationViewStyle(
+                        mapView!!.context,
+                        org.maplibre.navigation.android.navigation.ui.v5.R.attr.navigationViewRouteStyle
+                    )
                     navigationMapRoute =
                         NavigationMapRoute(
                             navigation,
                             mapView!!,
-                            vietmapGL!!,
-//                            routeStyleRes,
-                            "vmadmin_province"
+                            mapLibreMap!!,
+                            routeStyleRes,
+                            "Airport labels"
                         )
                 }
 
                 //show multiple route to map
-                if (response.body()!!.routes().size > 1) {
+                if (response.body()!!.routes.size > 1) {
                     navigationMapRoute?.addRoutes(directionsRoutes!!)
                 } else {
                     navigationMapRoute?.addRoute(currentRoute)
@@ -965,7 +976,7 @@ class FlutterMapLibreNavigationView :
                 isBuildingRoute = false
                 // get route point from current route
                 val routePoints: List<Point> =
-                    currentRoute?.routeOptions()?.coordinates() as List<Point>
+                    currentRoute?.routeOptions?.coordinates as List<Point>
                 animateVietmapGLForRouteOverview(padding, routePoints)
                 //Start Navigation again from new Point, if it was already in Progress
                 if (isNavigationInProgress || isStartNavigation) {
@@ -985,9 +996,9 @@ class FlutterMapLibreNavigationView :
     private fun moveCameraToOriginOfRoute() {
         currentRoute?.let {
             try {
-                val originCoordinate = it.routeOptions()?.coordinates()?.get(0)
+                val originCoordinate = it.routeOptions?.coordinates?.get(0)
                 originCoordinate?.let {
-                    val location = LatLng(originCoordinate.latitude(), originCoordinate.longitude())
+                    val location = LatLng(originCoordinate.latitude, originCoordinate.longitude)
                     // println("MoveCamera1")
                     moveCamera(location, null)
                 }
@@ -1080,8 +1091,12 @@ class FlutterMapLibreNavigationView :
         } else {
             LocationEngineProvider.getBestLocationEngine(context)
         }
+//        navigation = MapLibreNavigation(
+//            context, navigationOptions, locationEngine!!
+//        )
         navigation = MapLibreNavigation(
-            context, navigationOptions, locationEngine!!
+            locationEngine = locationEngine!!,
+            options = navigationOptions
         )
         methodChannel.setMethodCallHandler(this)
         mapView?.getMapAsync(this)
@@ -1096,27 +1111,27 @@ class FlutterMapLibreNavigationView :
 
 
     override fun onProgressChange(location: Location, routeProgress: RouteProgress) {
-
-        var currentSpeed = location.speed
+        var currentSpeed = location.accuracyMeters
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            currentSpeed = location.speedAccuracyMetersPerSecond
+            currentSpeed = location.speedMetersPerSeconds
         }
         if (!isNavigationCanceled) {
             try {
                 val noRoutes: Boolean = directionsRoutes?.isEmpty() ?: true
 
-                val newCurrentRoute: Boolean = !routeProgress.directionsRoute()
+                val newCurrentRoute: Boolean = !routeProgress.directionsRoute
                     .equals(directionsRoutes?.get(primaryRouteIndex))
                 val isANewRoute: Boolean = noRoutes || newCurrentRoute
                 if (isANewRoute) {
                 } else {
 
-                    distanceRemaining = routeProgress.distanceRemaining()
-                    durationRemaining = routeProgress.durationRemaining()
+                    distanceRemaining = routeProgress.distanceRemaining
+                    durationRemaining = routeProgress.durationRemaining
 
 
                     if (!isDisposed && !isBuildingRoute) {
-                        val snappedLocation: Location =
+                        val snappedLocation:
+                                org.maplibre.navigation.core.location.Location =
                             snapEngine.getSnappedLocation(location, routeProgress)
 
                         val progressEvent =
@@ -1126,24 +1141,27 @@ class FlutterMapLibreNavigationView :
                             CurrentCenterPoint(
                                 snappedLocation.latitude,
                                 snappedLocation.longitude,
-                                snappedLocation.bearing
+                                snappedLocation.bearing?:0f
                             )
                         if (!isOverviewing) {
                             this.routeProgress = routeProgress
-                            if (currentSpeed > 0) {
-                                moveCamera(
-                                    LatLng(snappedLocation.latitude, snappedLocation.longitude),
-                                    snappedLocation.bearing
-                                )
+                            if (currentSpeed != null) {
+                                if (currentSpeed > 0) {
+                                    moveCamera(
+                                        LatLng(snappedLocation.latitude, snappedLocation.longitude),
+                                        snappedLocation.bearing
+                                    )
+                                }
                             }
                         }
 
-                        vietmapGL?.locationComponent?.forceLocationUpdate(snappedLocation)
+                        mapLibreMap?.locationComponent?.forceLocationUpdate(snappedLocation.toAndroidLocation())
+
                     }
 
-//                    if (simulateRoute && !isDisposed && !isBuildingRoute) {
-//                        vietmapGL?.locationComponent?.forceLocationUpdate(location)
-//                    }
+                    if (simulateRoute && !isDisposed && !isBuildingRoute) {
+                        mapLibreMap?.locationComponent?.forceLocationUpdate(location.toAndroidLocation())
+                    }
 
                     if (!isRefreshing) {
                         isRefreshing = true
@@ -1190,7 +1208,7 @@ class FlutterMapLibreNavigationView :
 
     override fun userOffRoute(location: Location) {
         if (checkIfUserOffRoute(location)) {
-//            speechPlayer!!.onOffRoute()
+            speechPlayer!!.onOffRoute()
             PluginUtilities.sendEvent(
                 VietMapEvents.USER_OFF_ROUTE,
                 "{\"latitude\":${location.latitude},\"longitude\":${location.longitude}}"
@@ -1200,8 +1218,8 @@ class FlutterMapLibreNavigationView :
     }
 
     private fun checkIfUserOffRoute(location: Location): Boolean {
-        if (routeProgress?.currentStepPoints() != null) {
-            val snapLocation: Location = snapEngine.getSnappedLocation(location, routeProgress)
+        if (routeProgress?.currentStepPoints != null) {
+            val snapLocation: Location = snapEngine.getSnappedLocation(location, routeProgress!!)
             val distance: Double = calculateDistanceBetween2Point(location, snapLocation)
             return distance > this.distanceToOffRoute && checkIfUserIsDrivingToOtherRoute(location)
 //                && areBearingsClose(
@@ -1216,7 +1234,7 @@ class FlutterMapLibreNavigationView :
             //get list point
             snapLocationLatLng(
                 location,
-                it.routeOptions()?.coordinates() as List<Point>
+                it.routeOptions?.coordinates as List<Point>
             )?.let { snapLocation ->
                 val distance: Double = calculateDistanceBetween2Point(location, snapLocation)
                 if (distance < 30) {
@@ -1238,13 +1256,13 @@ class FlutterMapLibreNavigationView :
     }
 
     private fun snapLocationLatLng(location: Location, stepCoordinates: List<Point>): Location? {
-        val snappedLocation = Location(location)
+        var snappedLocation: Location?=null
+        snappedLocation = Location(location.latitude,location.longitude)
         val locationToPoint = Point.fromLngLat(location.longitude, location.latitude)
         if (stepCoordinates.size > 1) {
             val feature = TurfMisc.nearestPointOnLine(locationToPoint, stepCoordinates)
             val point = feature.geometry() as Point?
-            snappedLocation.longitude = point!!.longitude()
-            snappedLocation.latitude = point.latitude()
+            snappedLocation = Location(point!!.latitude(),point!!.longitude())
         }
         return snappedLocation
     }
@@ -1265,21 +1283,22 @@ class FlutterMapLibreNavigationView :
     }
 
     override fun onMilestoneEvent(
-        routeProgress: RouteProgress, instruction: String, milestone: Milestone
+        routeProgress: RouteProgress, instruction: String?, milestone: Milestone
     ) {
 
         if (voiceInstructionsEnabled) {
             playVoiceAnnouncement(milestone)
         }
         if (routeUtils.isArrivalEvent(routeProgress, milestone) && isNavigationInProgress) {
-            vietmapGL?.locationComponent?.locationEngine = locationEngine
+            mapLibreMap?.locationComponent?.locationEngine = LocationEngineDefault.getDefaultLocationEngine(context)
             PluginUtilities.sendEvent(VietMapEvents.ON_ARRIVAL)
 
-            vietmapGL?.locationComponent?.locationEngine = locationEngine
+            mapLibreMap?.locationComponent?.locationEngine = LocationEngineDefault.getDefaultLocationEngine(context)
+
             finishNavigation()
         }
         if (!isNavigationCanceled) {
-            PluginUtilities.sendEvent(VietMapEvents.MILESTONE_EVENT, instruction)
+            PluginUtilities.sendEvent(VietMapEvents.MILESTONE_EVENT, instruction?:"")
         }
     }
 
@@ -1309,8 +1328,9 @@ class FlutterMapLibreNavigationView :
 //        }
 //    }
 
-    override fun fasterRouteFound(directionsRoute: DirectionsRoute) {
-        PluginUtilities.sendEvent(VietMapEvents.FASTER_ROUTE_FOUND, directionsRoute.toJson())
+    override fun fasterRouteFound(directionsRoute: DirectionsRoute?) {
+        directionsRoute?.toJson()
+            ?.let { PluginUtilities.sendEvent(VietMapEvents.FASTER_ROUTE_FOUND, it) }
 
         refreshNavigation(directionsRoute)
 
@@ -1352,7 +1372,6 @@ class FlutterMapLibreNavigationView :
 //            null
 //        }
 //    }
-
 //    override fun onArrival() {
 //        vietmapGL?.locationComponent?.locationEngine = locationEngine
 //        PluginUtilities.sendEvent(VietMapEvents.ON_ARRIVAL)
@@ -1401,9 +1420,7 @@ class FlutterMapLibreNavigationView :
     @SuppressLint("MissingPermission")
     private fun fetchRouteWithBearing(isStartNavigation: Boolean, profile: String) {
         activity?.let {
-            fusedLocationClient?.lastLocation?.addOnSuccessListener(
-                it
-            ) { location: Location? ->
+            fusedLocationClient?.lastLocation?.addOnSuccessListener { location ->
                 if (location != null) {
                     getRoute(context, isStartNavigation, location.bearing, profile)
                 } else {
@@ -1428,28 +1445,24 @@ class FlutterMapLibreNavigationView :
 
     @SuppressLint("MissingPermission")
     private fun enableLocationComponent(loadedMapStyle: Style) {
-        val customLocationComponentOptions =
-            LocationComponentOptions.builder(context).pulseEnabled(true)
-//                .backgroundDrawable()
-                .build()
-        vietmapGL?.locationComponent?.let { locationComponent ->
+        val mapLocationEngine = LocationEngineDefault.getDefaultLocationEngine(context)
+        mapLibreMap?.locationComponent?.let { locationComponent ->
             locationComponent.activateLocationComponent(
                 LocationComponentActivationOptions.builder(context, loadedMapStyle)
-                    .locationComponentOptions(customLocationComponentOptions)
-                    .locationEngine(locationEngine).build()
+                    .locationEngine(mapLocationEngine).build()
             )
 
             locationComponent.setCameraMode(
                 CameraMode.TRACKING_GPS_NORTH,
                 750L,
                 zoom,
-                locationComponent.lastKnownLocation?.bearing?.toDouble() ?: 0.0,
+                 0.0,
                 tilt,
                 null
             )
             locationComponent.zoomWhileTracking(18.0)
             locationComponent.renderMode = RenderMode.GPS
-            locationComponent.locationEngine = locationEngine
+            locationComponent.locationEngine = mapLocationEngine
 
             locationComponent.isLocationComponentEnabled = true
         }
@@ -1467,7 +1480,7 @@ class FlutterMapLibreNavigationView :
         methodChannel.setMethodCallHandler(null)
         if (voiceInstructionsEnabled) {
             try {
-//                speechPlayer?.onDestroy()
+                speechPlayer?.onDestroy()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -1497,7 +1510,7 @@ class FlutterMapLibreNavigationView :
             return true
         }
 
-        val pointf = vietmapGL!!.projection.toScreenLocation(point)
+        val pointf = mapLibreMap!!.projection.toScreenLocation(point)
         PluginUtilities.sendEvent(
             VietMapEvents.ON_MAP_CLICK,
             "{\"latitude\":${point.latitude},\"longitude\":${point.longitude},\"x\":${pointf.x},\"y\":${pointf.y}}"
@@ -1508,8 +1521,8 @@ class FlutterMapLibreNavigationView :
 
     private fun buildRouteInformationFromProgress(routeProgress: RouteProgress?): RouteInformation {
         return if (routeProgress == null) {
-            RouteInformation.create(null, null, null)
-        } else RouteInformation.create(routeProgress.directionsRoute(), null, null)
+            RouteInformation(null, null, null)
+        } else RouteInformation(routeProgress.directionsRoute, null, null)
     }
 
     private fun showRouteOverview(padding: IntArray?, currentRouteProgress: RouteProgress) {
@@ -1529,15 +1542,19 @@ class FlutterMapLibreNavigationView :
         }
     }
 
-    private fun animateVietmapGLForRouteOverview(padding: IntArray, routePoints: List<Point>) {
+    private fun animateVietmapGLForRouteOverview(padding: IntArray, routePoints: List<org.maplibre.geojson.model.Point>) {
         if (routePoints.size <= 1) {
             return
         }
         val resetUpdate: CameraUpdate = buildResetCameraUpdate()
-        val overviewUpdate: CameraUpdate = buildOverviewCameraUpdate(padding, routePoints)
-//        vietmapGL?.animateCamera(
-//            resetUpdate, 150, CameraOverviewCancelableCallback(overviewUpdate, vietmapGL)
+        val overviewUpdate: CameraUpdate = buildOverviewCameraUpdate(padding, routePoints.toJvmPoints())
+//        mapLibreMap?.animateCamera(
+//            resetUpdate, 150, CameraOverviewCancelableCallback(overviewUpdate, mapLibreMap)
 //        )
+//        NavigationCamera(mapLibreMap!!, mapLibreMap!!.locationComponent).showRouteOverview(
+//            intArrayOf(10,10,10,10)
+//        )
+
     }
 
     private fun buildResetCameraUpdate(): CameraUpdate {
@@ -1568,34 +1585,34 @@ class FlutterMapLibreNavigationView :
         val iconBitmap = BitmapFactory.decodeByteArray(byteArray, 0, byteArray!!.size)
 
 
-        vietmapGL!!.setOnMarkerClickListener { marker ->
+        mapLibreMap!!.setOnMarkerClickListener { marker ->
             if (marker != null) {
                 val markerId = marker.id
                 // println(markerId)
             }
             false
         }
-        vietmapGL!!.style!!.addImage(markerGroupId, iconBitmap)
+        mapLibreMap!!.style!!.addImage(markerGroupId, iconBitmap)
     }
 
     private fun handleProgressChange(routeProgress: RouteProgress, location: Location) {
         // println("handleProgressChange")
-        if (location.speed < 1) return
+        if (location.speedMetersPerSeconds!! < 1) return
         // println("start handleProgressChange")
 
         val distanceRemainingToNextTurn =
-            routeProgress.currentLegProgress()?.currentStepProgress()?.distanceRemaining()
+            routeProgress.currentLegProgress?.currentStepProgress?.distanceRemaining
         if (distanceRemainingToNextTurn != null && distanceRemainingToNextTurn < 30) {
             isNextTurnHandling = true
             val resetPosition: CameraPosition =
                 CameraPosition.Builder().tilt(0.0).zoom(17.0).build()
             val cameraUpdate = CameraUpdateFactory.newCameraPosition(resetPosition)
-            vietmapGL?.animateCamera(
+            mapLibreMap?.animateCamera(
                 cameraUpdate, 1000
             )
         } else {
-            if (routeProgress.currentLegProgress().currentStepProgress()
-                    .distanceTraveled() > 30 && !isOverviewing
+            if (routeProgress.currentLegProgress.currentStepProgress
+                    .distanceTraveled > 30 && !isOverviewing
             ) {
                 isNextTurnHandling = false
                 recenter()
@@ -1654,7 +1671,7 @@ class FlutterMapLibreNavigationView :
                 val markerOption = MarkerOptions().icon(icon).title((d["title"] ?: "") as String)
                     .snippet((d["snippet"] ?: "") as String).position(position)
 
-                val marker: Marker = vietmapGL!!.addMarker(markerOption)
+                val marker: Marker = mapLibreMap!!.addMarker(markerOption)
                 listMarkerId.add(marker.id)
                 listMarkers.add(marker)
             }
@@ -1700,10 +1717,10 @@ class FlutterMapLibreNavigationView :
         }
     }
 
-    override fun onResponseReceived(response: DirectionsResponse?, routeProgress: RouteProgress?) {
+    override fun onResponseReceived(response: DirectionsResponse, routeProgress: RouteProgress) {
         if (response != null) {
-            if (response.routes().isNotEmpty()) {
-                directionsRoutes = response.routes()
+            if (response.routes.isNotEmpty()) {
+                directionsRoutes = response.routes
                 currentRoute = if (directionsRoutes!!.size <= primaryRouteIndex) {
                     directionsRoutes!![0]
                 } else {
@@ -1716,7 +1733,7 @@ class FlutterMapLibreNavigationView :
         }
     }
 
-    override fun onErrorReceived(throwable: Throwable?) {
+    override fun onErrorReceived(throwable: Throwable) {
         if (throwable != null) {
             PluginUtilities.sendEvent(
                 VietMapEvents.ROUTE_BUILD_FAILED, "${throwable.message?.replace("\"", "'")}"
